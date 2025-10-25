@@ -1,0 +1,20 @@
+# LLDP Configuration - Managed by Ansible
+# {{ ansible_managed }}
+
+# Configure system description
+configure system description "{{ lldp_system_description }}"
+
+# Configure system platform
+configure system platform "{{ lldp_system_platform }}"
+
+# Management interface pattern
+configure system interface pattern "{{ lldp_mgmt_pattern }}"
+
+{% if lldp_enable_snmp %}
+# Enable SNMP support
+configure system snmp enabled
+{% endif %}
+
+# Enable all LLDP TLVs
+configure lldp tx-interval 30
+configure lldp tx-hold 4

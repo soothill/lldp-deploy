@@ -1,0 +1,88 @@
+---
+- name: Deploy and Configure LLDP on Linux Servers
+  hosts: all
+  become: yes
+  
+  vars:
+    lldp_package: lldpd
+    lldp_service: lldpd
+    lldp_config_file: /etc/lldpd.d/ansible.conf
+    lldp_config_dir: /etc/lldpd.d
+    
+    # LLDP Configuration Options
+    lldp_system_description: "{{ ansible_hostname }}"
+    lldp_system_platform: "{{ ansible_system }}"
+    lldp_enable_snmp: no
+    lldp_mgmt_pattern: "!dummy*,!veth*"
+    
+  tasks:
+    - name: Install LLDP daemon on Debian/Ubuntu
+      apt:
+        name: "{{ lldp_package }}"
+        state: present
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+      notify: restart lldpd
+      
+    - name: Install LLDP daemon on RedHat/CentOS
+      yum:
+        name: "{{ lldp_package }}"
+        state: present
+      when: ansible_os_family == "RedHat"
+      notify: restart lldpd
+      
+    - name: Ensure LLDP config directory exists
+      file:
+        path: "{{ lldp_config_dir }}"
+        state: directory
+        mode: '0755'
+        
+    - name: Configure LLDP daemon
+      template:
+        src: lldpd.conf.j2
+        dest: "{{ lldp_config_file }}"
+        mode: '0644'
+      notify: restart lldpd
+      when: lldp_custom_config | default(false)
+      
+    - name: Ensure LLDP service is enabled
+      systemd:
+        name: "{{ lldp_service }}"
+        enabled: yes
+        daemon_reload: yes
+        
+    - name: Ensure LLDP service is started
+      systemd:
+        name: "{{ lldp_service }}"
+        state: started
+        
+    - name: Wait for LLDP service to be ready
+      wait_for:
+        timeout: 5
+      delegate_to: localhost
+      
+    - name: Verify LLDP service is running
+      systemd:
+        name: "{{ lldp_service }}"
+      register: lldp_status
+      
+    - name: Display LLDP service status
+      debug:
+        msg: "LLDP service is {{ lldp_status.status.ActiveState }} on {{ ansible_hostname }}"
+        
+    - name: Show LLDP neighbors (if available)
+      command: lldpcli show neighbors
+      register: lldp_neighbors
+      changed_when: false
+      failed_when: false
+      
+    - name: Display LLDP neighbors
+      debug:
+        var: lldp_neighbors.stdout_lines
+      when: lldp_neighbors.rc == 0
+        
+  handlers:
+    - name: restart lldpd
+      systemd:
+        name: "{{ lldp_service }}"
+        state: restarted

@@ -1,0 +1,47 @@
+---
+- name: Deploy and Configure LLDP on Linux Servers
+  hosts: all
+  become: yes
+  
+  vars:
+    lldp_package: lldpd
+    lldp_service: lldpd
+    
+  tasks:
+    - name: Install LLDP daemon on Debian/Ubuntu
+      apt:
+        name: "{{ lldp_package }}"
+        state: present
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+      
+    - name: Install LLDP daemon on RedHat/CentOS
+      yum:
+        name: "{{ lldp_package }}"
+        state: present
+      when: ansible_os_family == "RedHat"
+      
+    - name: Ensure LLDP service is enabled
+      systemd:
+        name: "{{ lldp_service }}"
+        enabled: yes
+        
+    - name: Ensure LLDP service is started
+      systemd:
+        name: "{{ lldp_service }}"
+        state: started
+        
+    - name: Verify LLDP service is running
+      systemd:
+        name: "{{ lldp_service }}"
+      register: lldp_status
+      
+    - name: Display LLDP service status
+      debug:
+        msg: "LLDP service is {{ lldp_status.status.ActiveState }}"
+        
+  handlers:
+    - name: restart lldpd
+      systemd:
+        name: "{{ lldp_service }}"
+        state: restarted
