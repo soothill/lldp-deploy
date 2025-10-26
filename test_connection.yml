@@ -1,0 +1,27 @@
+---
+- name: Test Connection and Sudo Access
+  hosts: all
+  gather_facts: no
+
+  tasks:
+    - name: Test basic connectivity (no sudo)
+      ping:
+
+    - name: Test sudo access
+      command: whoami
+      become: yes
+      register: sudo_test
+
+    - name: Display sudo test result
+      debug:
+        msg: "Running as: {{ sudo_test.stdout }}"
+
+    - name: Check if passwordless sudo works
+      command: sudo -n whoami
+      register: passwordless_test
+      failed_when: false
+      changed_when: false
+
+    - name: Display passwordless sudo status
+      debug:
+        msg: "{{ 'Passwordless sudo WORKS' if passwordless_test.rc == 0 else 'Passwordless sudo FAILS - may need to configure /etc/sudoers' }}"
