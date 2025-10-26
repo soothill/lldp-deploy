@@ -249,7 +249,7 @@ ansible-playbook -i inventory.ini check_sudo.yml
 3. **Incorrect inventory configuration**
    - Don't add `ansible_become=yes` to individual host lines
    - Let playbooks control when sudo is needed
-   - See [inventory_fixed.ini](inventory_fixed.ini) for examples
+   - See [example_inventory.ini](example_inventory.ini) for correct examples
 
 ### Service not starting
 

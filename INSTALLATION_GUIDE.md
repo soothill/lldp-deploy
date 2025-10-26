@@ -173,7 +173,7 @@ make info
 - **deploy_lldp_advanced.yml** - Advanced deployment with custom config
 - **FIX_REQUIRETTY.md** - Detailed requiretty troubleshooting
 - **FIX_SUDO_ISSUE.md** - Detailed sudo troubleshooting
-- **inventory_fixed.ini** - Example inventory with correct configuration
+- **example_inventory.ini** - Template inventory with correct configuration examples
 
 ## Support
 
