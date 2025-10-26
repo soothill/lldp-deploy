@@ -1,0 +1,47 @@
+---
+- name: Fix sudo requiretty issue for Ansible
+  hosts: all
+  # Run this with: ansible-playbook -i inventory.ini fix_requiretty.yml --ask-become-pass --limit nasbox.local
+
+  tasks:
+    - name: Skip for root users
+      debug:
+        msg: "Skipping {{ inventory_hostname }} - running as root"
+      when: ansible_user == 'root'
+
+    - name: Check if requiretty is enabled in sudoers
+      shell: grep -E "^Defaults.*requiretty" /etc/sudoers /etc/sudoers.d/* 2>/dev/null || echo "not found"
+      become: yes
+      register: requiretty_check
+      changed_when: false
+      when: ansible_user != 'root'
+
+    - name: Display requiretty status
+      debug:
+        msg: "{{ requiretty_check.stdout_lines }}"
+      when: ansible_user != 'root' and requiretty_check is defined
+
+    - name: Disable requiretty for user in sudoers.d
+      copy:
+        content: |
+          # Managed by Ansible
+          # Allow {{ ansible_user }} to run commands without password and without TTY
+          Defaults:{{ ansible_user }} !requiretty
+          {{ ansible_user }} ALL=(ALL) NOPASSWD: ALL
+        dest: "/etc/sudoers.d/{{ ansible_user }}"
+        mode: '0440'
+        validate: 'visudo -cf %s'
+      become: yes
+      when: ansible_user != 'root'
+
+    - name: Test sudo without TTY
+      shell: sudo -n whoami
+      register: sudo_test
+      changed_when: false
+      failed_when: false
+      when: ansible_user != 'root'
+
+    - name: Display test result
+      debug:
+        msg: "{{ '✅ SUCCESS: Passwordless sudo now works without TTY!' if sudo_test.rc == 0 else '❌ FAILED: Still having issues - output: ' + sudo_test.stderr }}"
+      when: ansible_user != 'root' and sudo_test is defined
