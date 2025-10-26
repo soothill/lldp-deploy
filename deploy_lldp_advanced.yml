@@ -78,16 +78,15 @@
         mode: '0644'
       notify: restart lldpd
       when: lldp_custom_config | default(false)
-      
-    - name: Ensure LLDP service is enabled
+
+    - name: Flush handlers to apply configuration changes
+      meta: flush_handlers
+
+    - name: Ensure LLDP service is enabled and started
       systemd:
         name: "{{ lldp_service }}"
         enabled: yes
         daemon_reload: yes
-        
-    - name: Ensure LLDP service is started
-      systemd:
-        name: "{{ lldp_service }}"
         state: started
         
     - name: Wait for LLDP service to be ready

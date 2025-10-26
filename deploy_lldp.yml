@@ -55,14 +55,13 @@
       when: ansible_os_family == "RedHat"
       notify: restart lldpd
 
-    - name: Ensure LLDP service is enabled
+    - name: Flush handlers to apply configuration changes
+      meta: flush_handlers
+
+    - name: Ensure LLDP service is enabled and started
       systemd:
         name: "{{ lldp_service }}"
         enabled: yes
-        
-    - name: Ensure LLDP service is started
-      systemd:
-        name: "{{ lldp_service }}"
         state: started
         
     - name: Verify LLDP service is running
