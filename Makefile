@@ -72,33 +72,33 @@ test-connection: ## Test Ansible connectivity to all hosts
 
 verify: ## Verify LLDP service status on all hosts
 	@echo "$(GREEN)Checking LLDP service status...$(NC)"
-	ansible all -i $(INVENTORY) -a "systemctl status lldpd" || true
+	ansible all -i $(INVENTORY) -m systemd -a "name=lldpd" -b || true
 
 status: verify ## Alias for 'make verify'
 
 neighbors: ## Show LLDP neighbors on all hosts
 	@echo "$(GREEN)Displaying LLDP neighbors...$(NC)"
-	ansible all -i $(INVENTORY) -a "lldpcli show neighbors" || true
+	ansible all -i $(INVENTORY) -m command -a "lldpcli show neighbors" || true
 
 info: ## Show LLDP chassis information on all hosts
 	@echo "$(GREEN)Displaying LLDP chassis information...$(NC)"
-	ansible all -i $(INVENTORY) -a "lldpcli show chassis" || true
+	ansible all -i $(INVENTORY) -m command -a "lldpcli show chassis" || true
 
 restart: ## Restart LLDP service on all hosts
 	@echo "$(YELLOW)Restarting LLDP service...$(NC)"
-	ansible all -i $(INVENTORY) -a "systemctl restart lldpd" -b
+	ansible all -i $(INVENTORY) -m systemd -a "name=lldpd state=restarted" -b
 
 stop: ## Stop LLDP service on all hosts
 	@echo "$(YELLOW)Stopping LLDP service...$(NC)"
-	ansible all -i $(INVENTORY) -a "systemctl stop lldpd" -b
+	ansible all -i $(INVENTORY) -m systemd -a "name=lldpd state=stopped" -b
 
 start: ## Start LLDP service on all hosts
 	@echo "$(GREEN)Starting LLDP service...$(NC)"
-	ansible all -i $(INVENTORY) -a "systemctl start lldpd" -b
+	ansible all -i $(INVENTORY) -m systemd -a "name=lldpd state=started" -b
 
 logs: ## View LLDP service logs on all hosts
 	@echo "$(GREEN)Fetching LLDP logs...$(NC)"
-	ansible all -i $(INVENTORY) -a "journalctl -u lldpd -n 50 --no-pager" -b
+	ansible all -i $(INVENTORY) -m command -a "journalctl -u lldpd -n 50 --no-pager" -b
 
 lint: ## Lint Ansible playbooks
 	@echo "$(GREEN)Linting playbooks...$(NC)"
