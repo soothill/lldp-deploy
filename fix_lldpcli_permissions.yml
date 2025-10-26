@@ -1,7 +1,10 @@
 ---
-- name: Fix lldpcli Binary Permissions
+- name: Fix lldpcli Access via Sudoers
   hosts: all
   become: yes
+
+  vars:
+    lldp_socket_group: lldpd
 
   tasks:
     - name: Check if lldpcli exists
@@ -9,55 +12,72 @@
         path: /usr/sbin/lldpcli
       register: lldpcli_check
 
-    - name: Display current permissions
+    - name: Display lldpcli status
       debug:
-        msg: "Current lldpcli mode: {{ lldpcli_check.stat.mode }}"
+        msg: "lldpcli found at /usr/sbin/lldpcli"
       when: lldpcli_check.stat.exists
 
-    - name: Fix lldpcli binary permissions (make it world-executable)
-      file:
-        path: /usr/sbin/lldpcli
-        mode: '0755'
+    - name: Ensure lldpd group exists
+      group:
+        name: "{{ lldp_socket_group }}"
+        state: present
+        system: yes
+
+    - name: Add current user to lldpd group
+      user:
+        name: "{{ ansible_user }}"
+        groups: "{{ lldp_socket_group }}"
+        append: yes
+      when: ansible_user is defined and ansible_user != 'root'
+
+    - name: Configure sudoers for lldpcli/lldpctl access
+      copy:
+        content: |
+          # Managed by Ansible
+          # Allow users in lldpd group to run lldpcli and lldpctl without password
+          # This is more secure and survives package updates
+          %{{ lldp_socket_group }} ALL=(ALL) NOPASSWD: /usr/sbin/lldpcli, /usr/sbin/lldpctl, /usr/bin/lldpcli, /usr/bin/lldpctl
+        dest: "/etc/sudoers.d/lldp"
+        mode: '0440'
         owner: root
         group: root
+        validate: 'visudo -cf %s'
       when: lldpcli_check.stat.exists
 
-    - name: Check if lldpd binary exists and fix permissions
-      file:
-        path: /usr/sbin/lldpd
-        mode: '0755'
-        owner: root
-        group: root
-      when: lldpcli_check.stat.exists
+    - name: Verify sudoers configuration
+      command: cat /etc/sudoers.d/lldp
+      register: sudoers_content
+      changed_when: false
 
-    - name: Verify lldpcli is now executable
-      stat:
-        path: /usr/sbin/lldpcli
-      register: lldpcli_verify
-
-    - name: Display fixed permissions
+    - name: Display sudoers configuration
       debug:
-        msg:
-          - "✅ lldpcli permissions fixed!"
-          - "New mode: {{ lldpcli_verify.stat.mode }}"
-          - "Owner: {{ lldpcli_verify.stat.pw_name }}"
-          - "Group: {{ lldpcli_verify.stat.gr_name }}"
+        msg: "✅ Sudoers configured for lldpd group"
 
-    - name: Test lldpcli execution as non-root user
-      command: /usr/sbin/lldpcli show chassis
+    - name: Test lldpcli execution via sudo
+      command: sudo lldpcli show chassis
       become: no
       register: test_exec
       failed_when: false
       changed_when: false
+      when: ansible_user != 'root'
 
     - name: Display test result
       debug:
-        msg: "{{ '✅ SUCCESS: Non-root user can now execute lldpcli!' if test_exec.rc == 0 else '❌ STILL FAILING: ' + test_exec.stderr | default(test_exec.msg | default('Unknown error')) }}"
+        msg: "{{ '✅ SUCCESS: Non-root user can now run sudo lldpcli!' if test_exec.rc == 0 else '⚠️  Note: User may need to log out/in or run: newgrp ' + lldp_socket_group }}"
+      when: ansible_user != 'root'
 
     - name: Show usage instructions
       debug:
         msg:
-          - "You can now run lldpcli as a non-root user:"
-          - "  lldpcli show neighbors"
-          - "  lldpcli show chassis"
-          - "  lldpcli show interfaces"
+          - "Non-root users can now run LLDP commands using:"
+          - "  sudo lldpcli show neighbors"
+          - "  sudo lldpcli show chassis"
+          - "  sudo lldpctl show neighbors"
+          - ""
+          - "No password required for users in the '{{ lldp_socket_group }}' group"
+          - ""
+          - "Benefits of sudoers approach:"
+          - "  - More secure (doesn't modify binary permissions)"
+          - "  - Survives package updates"
+          - "  - Granular control over who can run lldp commands"
+      when: ansible_user != 'root'

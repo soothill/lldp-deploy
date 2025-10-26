@@ -268,13 +268,27 @@ journalctl -u lldpd -n 50
 - **Socket permission issues**: The playbooks now handle this automatically
 - Verify package installation: `dpkg -l | grep lldpd` (Debian/Ubuntu) or `rpm -qa | grep lldpd` (RedHat/CentOS)
 
-### Non-root users can't run lldpctl
+### Non-root users can't run lldpctl/lldpcli
+
+Non-root users run LLDP commands using sudo (passwordless for lldpd group members):
+
+```bash
+sudo lldpcli show neighbors
+sudo lldpcli show chassis
+sudo lldpctl show neighbors
+```
 
 After installation, users need to:
 1. Log out and log back in, OR
 2. Run `newgrp lldpd`
 
-This activates the group membership that allows non-root access to lldpctl.
+This activates the group membership for passwordless sudo access.
+
+**Why sudo?**
+- More secure than changing binary permissions
+- Survives package updates (permissions stay correct even after lldpd updates)
+- No password required for users in the lldpd group
+- Granular control over who can run LLDP commands
 
 ### No neighbors detected
 - Ensure network switch supports LLDP

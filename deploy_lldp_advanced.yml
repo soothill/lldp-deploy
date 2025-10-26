@@ -120,12 +120,18 @@
         group: "{{ lldp_socket_group }}"
         mode: '0660'
 
-    - name: Ensure lldpcli binary is executable by all users
-      file:
-        path: /usr/sbin/lldpcli
-        mode: '0755'
+    - name: Configure sudoers for lldpcli/lldpctl access
+      copy:
+        content: |
+          # Managed by Ansible
+          # Allow users in lldpd group to run lldpcli and lldpctl without password
+          # This is more secure and survives package updates
+          %{{ lldp_socket_group }} ALL=(ALL) NOPASSWD: /usr/sbin/lldpcli, /usr/sbin/lldpctl, /usr/bin/lldpcli, /usr/bin/lldpctl
+        dest: "/etc/sudoers.d/lldp"
+        mode: '0440'
         owner: root
         group: root
+        validate: 'visudo -cf %s'
 
     - name: Verify LLDP service is running
       systemd:
