@@ -2,6 +2,8 @@
 *.retry
 .ansible/
 ansible.log
+# Ignore custom inventory file (use example_inventory.ini as template)
+inventory.ini
 
 # Python
 __pycache__/

@@ -6,7 +6,8 @@ This repository contains Ansible playbooks to deploy and configure LLDP (Link La
 
 - **deploy_lldp.yml**: Basic playbook for LLDP installation and service management
 - **deploy_lldp_advanced.yml**: Enhanced playbook with configuration options and neighbor discovery
-- **inventory.ini**: Example inventory file
+- **example_inventory.ini**: Example inventory file (copy to inventory.ini)
+- **ansible.cfg**: Ansible configuration with passwordless sudo support
 - **lldpd.conf.j2**: Jinja2 template for LLDP configuration (used with advanced playbook)
 
 ## Prerequisites
@@ -18,13 +19,16 @@ This repository contains Ansible playbooks to deploy and configure LLDP (Link La
 
 ## Quick Start - Basic Deployment
 
-### 1. Edit the inventory file
+### 1. Create your inventory file
+
+Copy the example inventory and customize it for your environment:
 
 ```bash
+cp example_inventory.ini inventory.ini
 nano inventory.ini
 ```
 
-Add your server hostnames and IP addresses.
+Add your server hostnames, IP addresses, and customize usernames as needed.
 
 ### 2. Deploy LLDP
 
