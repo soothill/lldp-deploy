@@ -35,44 +35,73 @@
         append: yes
       when: ansible_user is defined and ansible_user != 'root'
 
-    - name: Configure lldpd socket permissions (Debian/Ubuntu)
+    - name: Clear lldpd config (Debian/Ubuntu)
       copy:
         content: |
           # Managed by Ansible
-          # Configure lldpd to use group-accessible socket for non-root access
-          DAEMON_ARGS="-g {{ lldp_socket_group }}"
+          # Basic LLDP configuration
+          # Note: -g flag not supported in lldpd 1.0.x, using systemd override instead
+          DAEMON_ARGS=""
         dest: /etc/default/lldpd
         mode: '0644'
         backup: yes
       when: ansible_os_family == "Debian"
-      notify: restart lldpd
 
-    - name: Configure lldpd socket permissions (RedHat/CentOS)
+    - name: Clear lldpd config (RedHat/CentOS)
       copy:
         content: |
           # Managed by Ansible
-          # Configure lldpd to use group-accessible socket for non-root access
-          LLDPD_OPTIONS="-g {{ lldp_socket_group }}"
+          # Basic LLDP configuration
+          # Note: -g flag not supported in lldpd 1.0.x, using systemd override instead
+          LLDPD_OPTIONS=""
         dest: /etc/sysconfig/lldpd
         mode: '0644'
         backup: yes
       when: ansible_os_family == "RedHat"
-      notify: restart lldpd
 
-    - name: Flush handlers to apply configuration changes
-      meta: flush_handlers
+    - name: Create systemd override directory
+      file:
+        path: /etc/systemd/system/lldpd.service.d
+        state: directory
+        mode: '0755'
+
+    - name: Create systemd override to fix socket permissions
+      copy:
+        content: |
+          # Managed by Ansible
+          # Fix socket permissions for non-root access
+          # This is needed because lldpd 1.0.x doesn't support -g flag
+          [Service]
+          ExecStartPost=/bin/sh -c 'sleep 1; chgrp {{ lldp_socket_group }} /run/lldpd.socket; chmod g+rw /run/lldpd.socket'
+        dest: /etc/systemd/system/lldpd.service.d/socket-permissions.conf
+        mode: '0644'
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
 
     - name: Ensure LLDP service is enabled and started
       systemd:
         name: "{{ lldp_service }}"
         enabled: yes
-        state: started
-        
+        state: restarted
+
+    - name: Wait for service to stabilize and socket to be created
+      wait_for:
+        path: /run/lldpd.socket
+        timeout: 10
+
+    - name: Ensure socket has correct permissions
+      file:
+        path: /run/lldpd.socket
+        group: "{{ lldp_socket_group }}"
+        mode: '0660'
+
     - name: Verify LLDP service is running
       systemd:
         name: "{{ lldp_service }}"
       register: lldp_status
-      
+
     - name: Display LLDP service status
       debug:
         msg: "LLDP service is {{ lldp_status.status.ActiveState }}"

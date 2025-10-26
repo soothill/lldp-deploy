@@ -1,21 +1,13 @@
 ---
-- name: Deploy and Configure LLDP on Linux Servers
+- name: Deploy and Configure LLDP with Non-Root Access (Compatible)
   hosts: all
   become: yes
-  
+
   vars:
     lldp_package: lldpd
     lldp_service: lldpd
-    lldp_config_file: /etc/lldpd.d/ansible.conf
-    lldp_config_dir: /etc/lldpd.d
     lldp_socket_group: lldpd
 
-    # LLDP Configuration Options
-    lldp_system_description: "{{ ansible_hostname }}"
-    lldp_system_platform: "{{ ansible_system }}"
-    lldp_enable_snmp: no
-    lldp_mgmt_pattern: "!dummy*,!veth*"
-    
   tasks:
     - name: Install LLDP daemon on Debian/Ubuntu
       apt:
@@ -23,20 +15,12 @@
         state: present
         update_cache: yes
       when: ansible_os_family == "Debian"
-      notify: restart lldpd
-      
+
     - name: Install LLDP daemon on RedHat/CentOS
       yum:
         name: "{{ lldp_package }}"
         state: present
       when: ansible_os_family == "RedHat"
-      notify: restart lldpd
-      
-    - name: Ensure LLDP config directory exists
-      file:
-        path: "{{ lldp_config_dir }}"
-        state: directory
-        mode: '0755'
 
     - name: Create lldpd group for socket access
       group:
@@ -51,24 +35,22 @@
         append: yes
       when: ansible_user is defined and ansible_user != 'root'
 
-    - name: Clear lldpd config (Debian/Ubuntu)
+    - name: Clear lldpd config (Debian/Ubuntu) - no -g flag
       copy:
         content: |
           # Managed by Ansible
-          # Basic LLDP configuration
-          # Note: -g flag not supported in lldpd 1.0.x, using systemd override instead
+          # Basic LLDP configuration (version 1.0.x compatible)
           DAEMON_ARGS=""
         dest: /etc/default/lldpd
         mode: '0644'
         backup: yes
       when: ansible_os_family == "Debian"
 
-    - name: Clear lldpd config (RedHat/CentOS)
+    - name: Clear lldpd config (RedHat/CentOS) - no -g flag
       copy:
         content: |
           # Managed by Ansible
-          # Basic LLDP configuration
-          # Note: -g flag not supported in lldpd 1.0.x, using systemd override instead
+          # Basic LLDP configuration (version 1.0.x compatible)
           LLDPD_OPTIONS=""
         dest: /etc/sysconfig/lldpd
         mode: '0644'
@@ -86,18 +68,10 @@
         content: |
           # Managed by Ansible
           # Fix socket permissions for non-root access
-          # This is needed because lldpd 1.0.x doesn't support -g flag
           [Service]
           ExecStartPost=/bin/sh -c 'sleep 1; chgrp {{ lldp_socket_group }} /run/lldpd.socket; chmod g+rw /run/lldpd.socket'
         dest: /etc/systemd/system/lldpd.service.d/socket-permissions.conf
         mode: '0644'
-
-    - name: Configure LLDP daemon
-      template:
-        src: lldpd.conf.j2
-        dest: "{{ lldp_config_file }}"
-        mode: '0644'
-      when: lldp_custom_config | default(false)
 
     - name: Reload systemd daemon
       systemd:
@@ -119,29 +93,34 @@
         path: /run/lldpd.socket
         group: "{{ lldp_socket_group }}"
         mode: '0660'
-      
+
     - name: Verify LLDP service is running
-      systemd:
-        name: "{{ lldp_service }}"
-      register: lldp_status
-      
-    - name: Display LLDP service status
-      debug:
-        msg: "LLDP service is {{ lldp_status.status.ActiveState }} on {{ ansible_hostname }}"
-        
-    - name: Show LLDP neighbors (if available)
-      command: lldpcli show neighbors
-      register: lldp_neighbors
+      command: systemctl is-active lldpd
+      register: service_status
       changed_when: false
       failed_when: false
-      
-    - name: Display LLDP neighbors
+
+    - name: Display service status
       debug:
-        var: lldp_neighbors.stdout_lines
-      when: lldp_neighbors.rc == 0
-        
-  handlers:
-    - name: restart lldpd
-      systemd:
-        name: "{{ lldp_service }}"
-        state: restarted
+        msg: "LLDP service status: {{ service_status.stdout }}"
+
+    - name: Test lldpctl access
+      command: lldpctl show chassis
+      register: lldpctl_test
+      become_user: "{{ ansible_user }}"
+      become: yes
+      changed_when: false
+      failed_when: false
+
+    - name: Display lldpctl test result
+      debug:
+        msg: "{{ 'SUCCESS: Non-root user can run lldpctl' if lldpctl_test.rc == 0 else 'NOTE: User needs to log out/in or run: newgrp ' + lldp_socket_group }}"
+
+    - name: Display instructions
+      debug:
+        msg:
+          - "LLDP daemon is now running!"
+          - "Users in the '{{ lldp_socket_group }}' group can run lldpctl without sudo."
+          - "If lldpctl doesn't work immediately, users should:"
+          - "  1. Log out and log back in, OR"
+          - "  2. Run: newgrp {{ lldp_socket_group }}"
