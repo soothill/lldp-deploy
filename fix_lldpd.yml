@@ -1,0 +1,106 @@
+---
+- name: Fix LLDP Configuration Issues
+  hosts: all
+  become: yes
+
+  vars:
+    lldp_socket_group: lldpd
+
+  tasks:
+    - name: Check current lldpd config (Debian/Ubuntu)
+      command: cat /etc/default/lldpd
+      register: debian_config
+      when: ansible_os_family == "Debian"
+      failed_when: false
+      changed_when: false
+
+    - name: Display Debian config
+      debug:
+        var: debian_config.stdout_lines
+      when: ansible_os_family == "Debian" and debian_config.rc == 0
+
+    - name: Check if lldpd group exists
+      command: getent group lldpd
+      register: group_check
+      failed_when: false
+      changed_when: false
+
+    - name: Display group status
+      debug:
+        msg: "lldpd group {{ 'EXISTS' if group_check.rc == 0 else 'DOES NOT EXIST - THIS IS THE PROBLEM!' }}"
+
+    - name: Ensure lldpd group exists
+      group:
+        name: "{{ lldp_socket_group }}"
+        state: present
+        system: yes
+
+    - name: Verify group was created
+      command: getent group lldpd
+      register: group_verify
+      changed_when: false
+
+    - name: Display group info
+      debug:
+        var: group_verify.stdout
+
+    - name: Stop lldpd service
+      systemd:
+        name: lldpd
+        state: stopped
+      failed_when: false
+
+    - name: Clear any bad configuration (Debian/Ubuntu)
+      copy:
+        content: |
+          # Managed by Ansible
+          DAEMON_ARGS="-g lldpd"
+        dest: /etc/default/lldpd
+        mode: '0644'
+      when: ansible_os_family == "Debian"
+
+    - name: Clear any bad configuration (RedHat/CentOS)
+      copy:
+        content: |
+          # Managed by Ansible
+          LLDPD_OPTIONS="-g lldpd"
+        dest: /etc/sysconfig/lldpd
+        mode: '0644'
+      when: ansible_os_family == "RedHat"
+
+    - name: Test lldpd startup manually
+      command: /usr/sbin/lldpd -g lldpd
+      register: manual_test
+      failed_when: false
+      changed_when: false
+      timeout: 3
+
+    - name: Display manual test result
+      debug:
+        msg: "Manual test {{ 'SUCCEEDED' if manual_test.rc == 0 else 'FAILED with rc=' + (manual_test.rc|string) }}"
+
+    - name: Kill any running lldpd processes
+      command: pkill -9 lldpd
+      failed_when: false
+      changed_when: false
+
+    - name: Start lldpd service
+      systemd:
+        name: lldpd
+        state: started
+        daemon_reload: yes
+
+    - name: Wait a moment
+      wait_for:
+        timeout: 2
+      delegate_to: localhost
+
+    - name: Check service status
+      command: systemctl status lldpd
+      register: service_status
+      failed_when: false
+      changed_when: false
+
+    - name: Display service status
+      debug:
+        var: service_status.stdout_lines

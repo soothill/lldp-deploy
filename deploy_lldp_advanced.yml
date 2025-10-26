@@ -52,22 +52,26 @@
       when: ansible_user is defined and ansible_user != 'root'
 
     - name: Configure lldpd socket permissions (Debian/Ubuntu)
-      lineinfile:
-        path: /etc/default/lldpd
-        regexp: '^DAEMON_ARGS='
-        line: 'DAEMON_ARGS="-g {{ lldp_socket_group }}"'
-        create: yes
+      copy:
+        content: |
+          # Managed by Ansible
+          # Configure lldpd to use group-accessible socket for non-root access
+          DAEMON_ARGS="-g {{ lldp_socket_group }}"
+        dest: /etc/default/lldpd
         mode: '0644'
+        backup: yes
       when: ansible_os_family == "Debian"
       notify: restart lldpd
 
     - name: Configure lldpd socket permissions (RedHat/CentOS)
-      lineinfile:
-        path: /etc/sysconfig/lldpd
-        regexp: '^LLDPD_OPTIONS='
-        line: 'LLDPD_OPTIONS="-g {{ lldp_socket_group }}"'
-        create: yes
+      copy:
+        content: |
+          # Managed by Ansible
+          # Configure lldpd to use group-accessible socket for non-root access
+          LLDPD_OPTIONS="-g {{ lldp_socket_group }}"
+        dest: /etc/sysconfig/lldpd
         mode: '0644'
+        backup: yes
       when: ansible_os_family == "RedHat"
       notify: restart lldpd
 
