@@ -8,7 +8,8 @@
     lldp_service: lldpd
     lldp_config_file: /etc/lldpd.d/ansible.conf
     lldp_config_dir: /etc/lldpd.d
-    
+    lldp_socket_group: lldpd
+
     # LLDP Configuration Options
     lldp_system_description: "{{ ansible_hostname }}"
     lldp_system_platform: "{{ ansible_system }}"
@@ -36,7 +37,40 @@
         path: "{{ lldp_config_dir }}"
         state: directory
         mode: '0755'
-        
+
+    - name: Create lldpd group for socket access
+      group:
+        name: "{{ lldp_socket_group }}"
+        state: present
+        system: yes
+
+    - name: Add current user to lldpd group
+      user:
+        name: "{{ ansible_user }}"
+        groups: "{{ lldp_socket_group }}"
+        append: yes
+      when: ansible_user is defined and ansible_user != 'root'
+
+    - name: Configure lldpd socket permissions (Debian/Ubuntu)
+      lineinfile:
+        path: /etc/default/lldpd
+        regexp: '^DAEMON_ARGS='
+        line: 'DAEMON_ARGS="-g {{ lldp_socket_group }}"'
+        create: yes
+        mode: '0644'
+      when: ansible_os_family == "Debian"
+      notify: restart lldpd
+
+    - name: Configure lldpd socket permissions (RedHat/CentOS)
+      lineinfile:
+        path: /etc/sysconfig/lldpd
+        regexp: '^LLDPD_OPTIONS='
+        line: 'LLDPD_OPTIONS="-g {{ lldp_socket_group }}"'
+        create: yes
+        mode: '0644'
+      when: ansible_os_family == "RedHat"
+      notify: restart lldpd
+
     - name: Configure LLDP daemon
       template:
         src: lldpd.conf.j2
