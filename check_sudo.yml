@@ -1,0 +1,55 @@
+---
+- name: Check Sudo Configuration for Each Host
+  hosts: all
+  gather_facts: no
+
+  tasks:
+    - name: Test basic ping (no sudo)
+      ping:
+      register: ping_result
+
+    - name: Display ping result
+      debug:
+        msg: "✅ {{ inventory_hostname }}: Basic connectivity OK"
+
+    - name: Check current user
+      command: whoami
+      register: current_user
+      changed_when: false
+
+    - name: Display current user
+      debug:
+        msg: "Current user on {{ inventory_hostname }}: {{ current_user.stdout }}"
+
+    - name: Test if sudo requires password (run sudo -n)
+      shell: sudo -n whoami 2>&1
+      register: sudo_test
+      failed_when: false
+      changed_when: false
+
+    - name: Display sudo test result
+      debug:
+        msg: "{{ inventory_hostname }}: {{ 'Passwordless sudo WORKS ✅' if sudo_test.rc == 0 else 'Passwordless sudo FAILS ❌ - Output: ' + sudo_test.stdout }}"
+
+    - name: Check sudoers configuration
+      shell: sudo -n grep -r "{{ ansible_user }}" /etc/sudoers /etc/sudoers.d/ 2>/dev/null || echo "No sudoers entry found"
+      register: sudoers_check
+      failed_when: false
+      changed_when: false
+      when: sudo_test.rc == 0
+
+    - name: Display sudoers configuration
+      debug:
+        var: sudoers_check.stdout_lines
+      when: sudo_test.rc == 0 and sudoers_check is defined
+
+    - name: Summary for this host
+      debug:
+        msg:
+          - "========================================"
+          - "Host: {{ inventory_hostname }}"
+          - "User: {{ ansible_user }}"
+          - "Become required: {{ ansible_become | default('from ansible.cfg') }}"
+          - "Sudo test: {{ 'PASS ✅' if sudo_test.rc == 0 else 'FAIL ❌' }}"
+          - "{{ 'This host needs passwordless sudo configured!' if sudo_test.rc != 0 and ansible_user != 'root' else 'Configuration OK' }}"
+          - "========================================"
