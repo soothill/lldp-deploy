@@ -97,6 +97,13 @@
         group: "{{ lldp_socket_group }}"
         mode: '0660'
 
+    - name: Ensure lldpcli binary is executable by all users
+      file:
+        path: /usr/sbin/lldpcli
+        mode: '0755'
+        owner: root
+        group: root
+
     - name: Verify LLDP service is running
       systemd:
         name: "{{ lldp_service }}"
@@ -105,6 +112,20 @@
     - name: Display LLDP service status
       debug:
         msg: "LLDP service is {{ lldp_status.status.ActiveState }}"
+
+    - name: Test lldpcli access for non-root users
+      command: lldpcli show chassis
+      become: no
+      become_user: "{{ ansible_user }}"
+      register: lldpcli_test
+      failed_when: false
+      changed_when: false
+      when: ansible_user != 'root'
+
+    - name: Display lldpcli test result
+      debug:
+        msg: "{{ '✅ Non-root users can run lldpcli successfully' if lldpcli_test.rc == 0 else '⚠️  Note: Users may need to log out/in or run: newgrp ' + lldp_socket_group }}"
+      when: ansible_user != 'root'
         
   handlers:
     - name: restart lldpd

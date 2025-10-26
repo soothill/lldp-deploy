@@ -1,0 +1,52 @@
+---
+- name: Check lldpcli Binary Permissions
+  hosts: all
+  become: yes
+
+  tasks:
+    - name: Check lldpcli binary location and permissions
+      stat:
+        path: /usr/sbin/lldpcli
+      register: lldpcli_stat
+
+    - name: Display lldpcli permissions
+      debug:
+        msg:
+          - "Path: /usr/sbin/lldpcli"
+          - "Exists: {{ lldpcli_stat.stat.exists }}"
+          - "Mode: {{ lldpcli_stat.stat.mode | default('N/A') }}"
+          - "Owner: {{ lldpcli_stat.stat.pw_name | default('N/A') }}"
+          - "Group: {{ lldpcli_stat.stat.gr_name | default('N/A') }}"
+          - "Executable: {{ lldpcli_stat.stat.xusr | default(false) }}"
+
+    - name: Test if current user can execute lldpcli
+      command: /usr/sbin/lldpcli show chassis
+      become: no
+      register: exec_test
+      failed_when: false
+      changed_when: false
+
+    - name: Display execution test result
+      debug:
+        msg: "{{ 'SUCCESS: User can execute lldpcli' if exec_test.rc == 0 else 'FAILED: ' + exec_test.stderr | default(exec_test.msg | default('Unknown error')) }}"
+
+    - name: Check lldpctl symlink (if exists)
+      stat:
+        path: /usr/bin/lldpctl
+      register: lldpctl_stat
+
+    - name: Display lldpctl info if exists
+      debug:
+        msg:
+          - "lldpctl exists: {{ lldpctl_stat.stat.exists }}"
+          - "Mode: {{ lldpctl_stat.stat.mode | default('N/A') }}"
+      when: lldpctl_stat.stat.exists
+
+    - name: List lldp related binaries
+      shell: ls -la /usr/sbin/lldp* /usr/bin/lldp* 2>/dev/null || echo "No lldp binaries found"
+      register: lldp_binaries
+      changed_when: false
+
+    - name: Display all lldp binaries
+      debug:
+        var: lldp_binaries.stdout_lines

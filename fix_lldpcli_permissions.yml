@@ -1,0 +1,63 @@
+---
+- name: Fix lldpcli Binary Permissions
+  hosts: all
+  become: yes
+
+  tasks:
+    - name: Check if lldpcli exists
+      stat:
+        path: /usr/sbin/lldpcli
+      register: lldpcli_check
+
+    - name: Display current permissions
+      debug:
+        msg: "Current lldpcli mode: {{ lldpcli_check.stat.mode }}"
+      when: lldpcli_check.stat.exists
+
+    - name: Fix lldpcli binary permissions (make it world-executable)
+      file:
+        path: /usr/sbin/lldpcli
+        mode: '0755'
+        owner: root
+        group: root
+      when: lldpcli_check.stat.exists
+
+    - name: Check if lldpd binary exists and fix permissions
+      file:
+        path: /usr/sbin/lldpd
+        mode: '0755'
+        owner: root
+        group: root
+      when: lldpcli_check.stat.exists
+
+    - name: Verify lldpcli is now executable
+      stat:
+        path: /usr/sbin/lldpcli
+      register: lldpcli_verify
+
+    - name: Display fixed permissions
+      debug:
+        msg:
+          - "✅ lldpcli permissions fixed!"
+          - "New mode: {{ lldpcli_verify.stat.mode }}"
+          - "Owner: {{ lldpcli_verify.stat.pw_name }}"
+          - "Group: {{ lldpcli_verify.stat.gr_name }}"
+
+    - name: Test lldpcli execution as non-root user
+      command: /usr/sbin/lldpcli show chassis
+      become: no
+      register: test_exec
+      failed_when: false
+      changed_when: false
+
+    - name: Display test result
+      debug:
+        msg: "{{ '✅ SUCCESS: Non-root user can now execute lldpcli!' if test_exec.rc == 0 else '❌ STILL FAILING: ' + test_exec.stderr | default(test_exec.msg | default('Unknown error')) }}"
+
+    - name: Show usage instructions
+      debug:
+        msg:
+          - "You can now run lldpcli as a non-root user:"
+          - "  lldpcli show neighbors"
+          - "  lldpcli show chassis"
+          - "  lldpcli show interfaces"

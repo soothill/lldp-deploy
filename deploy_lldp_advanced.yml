@@ -119,12 +119,19 @@
         path: /run/lldpd.socket
         group: "{{ lldp_socket_group }}"
         mode: '0660'
-      
+
+    - name: Ensure lldpcli binary is executable by all users
+      file:
+        path: /usr/sbin/lldpcli
+        mode: '0755'
+        owner: root
+        group: root
+
     - name: Verify LLDP service is running
       systemd:
         name: "{{ lldp_service }}"
       register: lldp_status
-      
+
     - name: Display LLDP service status
       debug:
         msg: "LLDP service is {{ lldp_status.status.ActiveState }} on {{ ansible_hostname }}"
