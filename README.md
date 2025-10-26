@@ -17,7 +17,22 @@ This repository contains Ansible playbooks to deploy and configure LLDP (Link La
 - Sudo privileges on target servers
 - Target servers running Debian/Ubuntu or RedHat/CentOS
 
-## Quick Start - Basic Deployment
+## Quick Start - Automated Setup (Recommended)
+
+The easiest way to get started is using the interactive quickstart script:
+
+```bash
+./quickstart.sh
+```
+
+This will:
+- Check prerequisites (Ansible, Make)
+- Help you create inventory.ini
+- Run pre-flight checks (connectivity, sudo configuration)
+- **Automatically detect and fix common issues like requiretty**
+- Guide you through the installation process
+
+## Quick Start - Manual Deployment
 
 ### 1. Create your inventory file
 
@@ -30,7 +45,21 @@ nano inventory.ini
 
 Add your server hostnames, IP addresses, and customize usernames as needed.
 
-### 2. Deploy LLDP
+### 2. Run Pre-flight Checks (Recommended)
+
+Before deploying, check for common issues:
+
+```bash
+# Test basic connectivity
+ansible all -i inventory.ini -m ping
+
+# Check sudo configuration (detects requiretty and other sudo issues)
+ansible-playbook -i inventory.ini check_sudo.yml
+```
+
+If you see "Passwordless sudo FAILS" or "sudo: a password is required", see the [Troubleshooting](#troubleshooting) section.
+
+### 3. Deploy LLDP
 
 #### Using Make (Recommended)
 
@@ -46,8 +75,10 @@ ansible-playbook -i inventory.ini deploy_lldp.yml
 
 This will:
 - Install lldpd package
+- Configure non-root access (creates lldpd group)
 - Enable the service to start on boot
 - Start the service immediately
+- Configure socket permissions for non-root access
 - Verify the service is running
 
 ## Using the Makefile
@@ -197,15 +228,73 @@ ansible all -i inventory.ini -a "lldpcli show chassis"
 
 ## Troubleshooting
 
+### "Missing sudo password" Error
+
+This is the most common issue. The quickstart script will detect and help fix this automatically, but you can also run:
+
+```bash
+ansible-playbook -i inventory.ini check_sudo.yml
+```
+
+**Common causes:**
+
+1. **requiretty enabled** (Most common - shows "sudo: a password is required")
+   - Fix: `ansible-playbook -i inventory.ini fix_requiretty.yml --ask-become-pass`
+   - Manual fix: See [FIX_REQUIRETTY.md](FIX_REQUIRETTY.md)
+
+2. **Passwordless sudo not configured**
+   - Fix: `ansible-playbook -i inventory.ini setup_passwordless_sudo.yml --ask-become-pass`
+   - Manual fix: See [FIX_SUDO_ISSUE.md](FIX_SUDO_ISSUE.md)
+
+3. **Incorrect inventory configuration**
+   - Don't add `ansible_become=yes` to individual host lines
+   - Let playbooks control when sudo is needed
+   - See [inventory_fixed.ini](inventory_fixed.ini) for examples
+
 ### Service not starting
-- Check logs: `journalctl -u lldpd -n 50`
+
+If lldpd service fails to start, check:
+
+```bash
+# View detailed logs
+make logs
+
+# Or manually
+journalctl -u lldpd -n 50
+```
+
+**Common issues:**
+- **lldpd 1.0.x doesn't support `-g` flag**: Fixed in current playbooks (uses systemd override instead)
+- **Socket permission issues**: The playbooks now handle this automatically
 - Verify package installation: `dpkg -l | grep lldpd` (Debian/Ubuntu) or `rpm -qa | grep lldpd` (RedHat/CentOS)
+
+### Non-root users can't run lldpctl
+
+After installation, users need to:
+1. Log out and log back in, OR
+2. Run `newgrp lldpd`
+
+This activates the group membership that allows non-root access to lldpctl.
 
 ### No neighbors detected
 - Ensure network switch supports LLDP
 - Check if LLDP is enabled on switch ports
 - Verify network connectivity
 - Wait 30-60 seconds for neighbor discovery
+
+### Pre-flight Checks
+
+Run pre-flight checks before deploying:
+
+```bash
+./quickstart.sh  # Interactive with automatic detection and fixes
+```
+
+Or manually:
+```bash
+ansible all -i inventory.ini -m ping                    # Test connectivity
+ansible-playbook -i inventory.ini check_sudo.yml        # Check sudo configuration
+```
 
 ## Supported Distributions
 

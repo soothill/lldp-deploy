@@ -79,15 +79,80 @@ echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-read -p "Would you like to test connectivity now? (y/n) " -n 1 -r
+read -p "Would you like to run pre-flight checks now? (y/n) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo ""
-    make test-connection
-    echo ""
+    echo "Running pre-flight checks..."
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    read -p "Would you like to proceed with LLDP installation? (y/n) " -n 1 -r
+
+    # Test basic connectivity
+    echo "1. Testing basic connectivity..."
+    if ansible all -i inventory.ini -m ping > /dev/null 2>&1; then
+        echo "   ✅ All hosts reachable"
+    else
+        echo "   ❌ Some hosts unreachable"
+        echo "   Run: make test-connection"
+        exit 1
+    fi
+    echo ""
+
+    # Check sudo configuration
+    echo "2. Checking sudo configuration..."
+    echo "   (This checks for passwordless sudo and requiretty issues)"
+    echo ""
+
+    if ansible-playbook -i inventory.ini check_sudo.yml 2>&1 | tee /tmp/sudo_check.log | grep -q "Passwordless sudo FAILS"; then
+        echo ""
+        echo "⚠️  WARNING: Sudo configuration issues detected!"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+        # Check for requiretty specifically
+        if grep -q "sudo: a password is required" /tmp/sudo_check.log; then
+            echo ""
+            echo "❌ ISSUE: requiretty is enabled (common issue)"
+            echo ""
+            echo "This means sudo requires an interactive terminal, which"
+            echo "Ansible doesn't provide. This is fixable!"
+            echo ""
+            echo "FIX OPTIONS:"
+            echo ""
+            echo "Option 1 (Automatic - Recommended):"
+            echo "  ansible-playbook -i inventory.ini fix_requiretty.yml --ask-become-pass"
+            echo ""
+            echo "Option 2 (Manual - on each affected host):"
+            echo "  See: FIX_REQUIRETTY.md for detailed instructions"
+            echo ""
+            read -p "Would you like to run the automatic fix now? (y/n) " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                echo ""
+                echo "Running fix_requiretty.yml..."
+                ansible-playbook -i inventory.ini fix_requiretty.yml --ask-become-pass
+                echo ""
+                echo "Verifying fix..."
+                ansible-playbook -i inventory.ini check_sudo.yml
+            fi
+        else
+            echo ""
+            echo "For troubleshooting, see:"
+            echo "  - FIX_SUDO_ISSUE.md"
+            echo "  - FIX_REQUIRETTY.md"
+        fi
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+    else
+        echo "   ✅ All hosts have proper sudo configuration"
+        echo ""
+    fi
+
+    rm -f /tmp/sudo_check.log
+
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    read -p "Pre-flight checks complete. Proceed with installation? (y/n) " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo ""
@@ -105,7 +170,9 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     fi
 else
     echo ""
-    echo "You can run 'make test-connection' to test connectivity later."
+    echo "You can run these checks manually:"
+    echo "  make test-connection              # Test connectivity"
+    echo "  ansible-playbook -i inventory.ini check_sudo.yml  # Check sudo"
 fi
 
 echo ""
