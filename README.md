@@ -218,12 +218,16 @@ ansible all -i inventory.ini -a "systemctl status lldpd"
 
 ### View LLDP neighbors
 ```bash
-ansible all -i inventory.ini -a "lldpcli show neighbors"
+ansible all -i inventory.ini -a "sudo lldpcli show neighbors"
+# Or use the Makefile shortcut:
+make neighbors
 ```
 
 ### Show local chassis information
 ```bash
-ansible all -i inventory.ini -a "lldpcli show chassis"
+ansible all -i inventory.ini -a "sudo lldpcli show chassis"
+# Or use the Makefile shortcut:
+make info
 ```
 
 ## Troubleshooting

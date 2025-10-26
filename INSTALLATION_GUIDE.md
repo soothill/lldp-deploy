@@ -131,7 +131,14 @@ make logs
 journalctl -u lldpd -n 50
 ```
 
-### Issue 4: Non-root users can't run lldpctl
+### Issue 4: Non-root users can't run lldpctl/lldpcli
+
+Non-root users run LLDP commands using sudo (passwordless for lldpd group members):
+
+```bash
+sudo lldpcli show neighbors
+sudo lldpctl show chassis
+```
 
 After installation, users need to activate their group membership:
 
@@ -145,7 +152,7 @@ newgrp lldpd
 
 Then test:
 ```bash
-lldpctl show chassis
+sudo lldpcli show chassis
 ```
 
 ## Verification
