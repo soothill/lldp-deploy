@@ -35,17 +35,23 @@ echo ""
 # Check if inventory file exists
 if [ ! -f "inventory.ini" ]; then
     echo "⚠️  inventory.ini not found."
-    echo "Creating example inventory.ini..."
-    cat > inventory.ini <<EOF
+    if [ -f "example_inventory.ini" ]; then
+        echo "Creating inventory.ini from example..."
+        cp example_inventory.ini inventory.ini
+        echo "✅ Created inventory.ini - Please edit it with your servers"
+        echo "   Run: nano inventory.ini"
+    else
+        echo "Creating basic inventory.ini..."
+        cat > inventory.ini <<EOF
 [lldp_servers]
 # Add your servers here
-# server1.example.com ansible_host=192.168.1.10
+# server1.example.com ansible_host=192.168.1.10 ansible_user=youruser
 
 [lldp_servers:vars]
-ansible_user=your_username
-ansible_become=yes
+lldp_custom_config=true
 EOF
-    echo "✅ Created inventory.ini - Please edit it with your servers"
+        echo "✅ Created inventory.ini - Please edit it with your servers"
+    fi
     echo ""
     exit 0
 fi
