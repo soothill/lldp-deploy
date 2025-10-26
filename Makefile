@@ -34,19 +34,22 @@ help: ## Show this help message
 	@echo "  make verify                     # Check LLDP service status"
 	@echo "  make neighbors                  # Show LLDP neighbors"
 
-install: ## Deploy LLDP using basic playbook
+install: ## Deploy LLDP using basic playbook (prompts for sudo password if needed)
 	@echo "$(GREEN)Deploying LLDP to all hosts...$(NC)"
-	ansible-playbook -i $(INVENTORY) deploy_lldp.yml $(ANSIBLE_OPTS)
+	@echo "$(YELLOW)Note: You may be prompted for your sudo password on remote hosts$(NC)"
+	ansible-playbook -i $(INVENTORY) deploy_lldp.yml $(ANSIBLE_OPTS) --ask-become-pass
 
 install-basic: install ## Alias for 'make install'
 
-install-advanced: ## Deploy LLDP using advanced playbook with configuration
+install-advanced: ## Deploy LLDP using advanced playbook with configuration (prompts for sudo password if needed)
 	@echo "$(GREEN)Deploying LLDP with advanced configuration...$(NC)"
-	ansible-playbook -i $(INVENTORY) deploy_lldp_advanced.yml $(ANSIBLE_OPTS)
+	@echo "$(YELLOW)Note: You may be prompted for your sudo password on remote hosts$(NC)"
+	ansible-playbook -i $(INVENTORY) deploy_lldp_advanced.yml $(ANSIBLE_OPTS) --ask-become-pass
 
-install-custom: ## Deploy with custom configuration enabled
+install-custom: ## Deploy with custom configuration enabled (prompts for sudo password if needed)
 	@echo "$(GREEN)Deploying LLDP with custom configuration...$(NC)"
-	ansible-playbook -i $(INVENTORY) deploy_lldp_advanced.yml -e "lldp_custom_config=true" $(ANSIBLE_OPTS)
+	@echo "$(YELLOW)Note: You may be prompted for your sudo password on remote hosts$(NC)"
+	ansible-playbook -i $(INVENTORY) deploy_lldp_advanced.yml -e "lldp_custom_config=true" $(ANSIBLE_OPTS) --ask-become-pass
 
 check: ## Dry run - show what would change (basic playbook)
 	@echo "$(YELLOW)Running check mode (no changes will be made)...$(NC)"
