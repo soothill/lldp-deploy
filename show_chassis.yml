@@ -1,0 +1,33 @@
+---
+- name: Show LLDP Chassis Info (works with or without sudo)
+  hosts: all
+  gather_facts: no
+
+  tasks:
+    - name: Check if running as root
+      command: whoami
+      register: current_user
+      changed_when: false
+
+    - name: Check if sudo exists
+      stat:
+        path: /usr/bin/sudo
+      register: sudo_exists
+
+    - name: Show chassis (as root or on systems without sudo)
+      command: lldpcli show chassis
+      register: chassis_output
+      changed_when: false
+      failed_when: false
+      when: current_user.stdout == 'root' or not sudo_exists.stat.exists
+
+    - name: Show chassis (via sudo on non-root systems)
+      command: sudo lldpcli show chassis
+      register: chassis_sudo_output
+      changed_when: false
+      failed_when: false
+      when: current_user.stdout != 'root' and sudo_exists.stat.exists
+
+    - name: Display LLDP chassis information
+      debug:
+        msg: "{{ (chassis_output.stdout_lines | default([])) or (chassis_sudo_output.stdout_lines | default([])) or ['No chassis info found or command failed'] }}"

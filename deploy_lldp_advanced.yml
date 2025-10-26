@@ -120,6 +120,11 @@
         group: "{{ lldp_socket_group }}"
         mode: '0660'
 
+    - name: Check if sudo exists (not present on some systems like Proxmox)
+      stat:
+        path: /usr/bin/sudo
+      register: sudo_check
+
     - name: Configure sudoers for lldpcli/lldpctl access
       copy:
         content: |
@@ -132,6 +137,7 @@
         owner: root
         group: root
         validate: 'visudo -cf %s'
+      when: sudo_check.stat.exists and ansible_user != 'root'
 
     - name: Verify LLDP service is running
       systemd:

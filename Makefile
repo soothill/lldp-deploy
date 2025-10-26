@@ -78,11 +78,11 @@ status: verify ## Alias for 'make verify'
 
 neighbors: ## Show LLDP neighbors on all hosts
 	@echo "$(GREEN)Displaying LLDP neighbors...$(NC)"
-	ansible all -i $(INVENTORY) -m command -a "sudo lldpcli show neighbors" || true
+	ansible-playbook -i $(INVENTORY) show_neighbors.yml
 
 info: ## Show LLDP chassis information on all hosts
 	@echo "$(GREEN)Displaying LLDP chassis information...$(NC)"
-	ansible all -i $(INVENTORY) -m command -a "sudo lldpcli show chassis" || true
+	ansible-playbook -i $(INVENTORY) show_chassis.yml
 
 restart: ## Restart LLDP service on all hosts
 	@echo "$(YELLOW)Restarting LLDP service...$(NC)"

@@ -97,6 +97,11 @@
         group: "{{ lldp_socket_group }}"
         mode: '0660'
 
+    - name: Check if sudo exists (not present on some systems like Proxmox)
+      stat:
+        path: /usr/bin/sudo
+      register: sudo_check
+
     - name: Configure sudoers for lldpcli/lldpctl access
       copy:
         content: |
@@ -109,6 +114,7 @@
         owner: root
         group: root
         validate: 'visudo -cf %s'
+      when: sudo_check.stat.exists and ansible_user != 'root'
 
     - name: Verify LLDP service is running
       systemd:
@@ -125,14 +131,26 @@
       register: lldpcli_test
       failed_when: false
       changed_when: false
-      when: ansible_user != 'root'
+      when: ansible_user != 'root' and sudo_check.stat.exists
 
-    - name: Display lldpcli test result
+    - name: Test lldpcli access for root users (direct)
+      command: lldpcli show chassis
+      register: lldpcli_root_test
+      failed_when: false
+      changed_when: false
+      when: ansible_user == 'root'
+
+    - name: Display lldpcli test result (non-root with sudo)
       debug:
         msg: "{{ '✅ Non-root users can run sudo lldpcli successfully' if lldpcli_test.rc == 0 else '⚠️  Note: Users may need to log out/in or run: newgrp ' + lldp_socket_group }}"
-      when: ansible_user != 'root'
+      when: ansible_user != 'root' and sudo_check.stat.exists
 
-    - name: Display usage instructions
+    - name: Display lldpcli test result (root)
+      debug:
+        msg: "{{ '✅ Root user can run lldpcli successfully' if lldpcli_root_test.rc == 0 else '❌ lldpcli test failed' }}"
+      when: ansible_user == 'root'
+
+    - name: Display usage instructions (non-root with sudo)
       debug:
         msg:
           - "Non-root users can now run LLDP commands using:"
@@ -141,7 +159,16 @@
           - "  sudo lldpctl show neighbors"
           - ""
           - "No password required for users in the '{{ lldp_socket_group }}' group"
-      when: ansible_user != 'root'
+      when: ansible_user != 'root' and sudo_check.stat.exists
+
+    - name: Display usage instructions (root or no sudo)
+      debug:
+        msg:
+          - "Run LLDP commands directly (as root):"
+          - "  lldpcli show neighbors"
+          - "  lldpcli show chassis"
+          - "  lldpctl show neighbors"
+      when: ansible_user == 'root' or not sudo_check.stat.exists
         
   handlers:
     - name: restart lldpd
