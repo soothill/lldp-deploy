@@ -1,0 +1,99 @@
+---
+- name: Diagnose LLDP Issues
+  hosts: all
+  become: yes
+
+  tasks:
+    - name: Get full lldpd logs with actual error
+      shell: journalctl -u lldpd.service -n 100 --no-pager | grep -A 5 -B 5 "lldpd\[" || journalctl -u lldpd.service -n 100 --no-pager
+      register: full_logs
+      changed_when: false
+      failed_when: false
+
+    - name: Display full logs
+      debug:
+        var: full_logs.stdout_lines
+
+    - name: Check lldpd group exists
+      command: getent group lldpd
+      register: group_check
+      failed_when: false
+      changed_when: false
+
+    - name: Display group info
+      debug:
+        msg: "Group check: {{ group_check.stdout if group_check.rc == 0 else 'GROUP DOES NOT EXIST!' }}"
+
+    - name: Check /etc/default/lldpd contents (Debian/Ubuntu)
+      command: cat /etc/default/lldpd
+      register: debian_config
+      when: ansible_os_family == "Debian"
+      changed_when: false
+      failed_when: false
+
+    - name: Display Debian config
+      debug:
+        var: debian_config.stdout_lines
+      when: ansible_os_family == "Debian" and debian_config.rc == 0
+
+    - name: Check /etc/sysconfig/lldpd contents (RedHat/CentOS)
+      command: cat /etc/sysconfig/lldpd
+      register: redhat_config
+      when: ansible_os_family == "RedHat"
+      changed_when: false
+      failed_when: false
+
+    - name: Display RedHat config
+      debug:
+        var: redhat_config.stdout_lines
+      when: ansible_os_family == "RedHat" and redhat_config.rc == 0
+
+    - name: Check systemd service file
+      command: systemctl cat lldpd.service
+      register: service_file
+      changed_when: false
+      failed_when: false
+
+    - name: Display service file
+      debug:
+        var: service_file.stdout_lines
+
+    - name: Test lldpd manually without -g flag
+      command: timeout 2 /usr/sbin/lldpd -d
+      register: test_no_flag
+      failed_when: false
+      changed_when: false
+
+    - name: Display test without flag
+      debug:
+        msg: "Test without -g flag: rc={{ test_no_flag.rc }}, stderr={{ test_no_flag.stderr }}"
+
+    - name: Kill test process
+      command: pkill -9 lldpd
+      failed_when: false
+      changed_when: false
+
+    - name: Test lldpd manually with -g flag
+      command: timeout 2 /usr/sbin/lldpd -d -g lldpd
+      register: test_with_flag
+      failed_when: false
+      changed_when: false
+
+    - name: Display test with flag
+      debug:
+        msg: "Test with -g flag: rc={{ test_with_flag.rc }}, stderr={{ test_with_flag.stderr }}"
+
+    - name: Kill test process again
+      command: pkill -9 lldpd
+      failed_when: false
+      changed_when: false
+
+    - name: Check lldpd version
+      command: /usr/sbin/lldpd -v
+      register: lldpd_version
+      failed_when: false
+      changed_when: false
+
+    - name: Display version
+      debug:
+        var: lldpd_version.stderr_lines

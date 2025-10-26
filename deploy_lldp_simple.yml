@@ -1,0 +1,73 @@
+---
+- name: Deploy LLDP - Simple Version without Group Socket
+  hosts: all
+  become: yes
+
+  vars:
+    lldp_package: lldpd
+    lldp_service: lldpd
+
+  tasks:
+    - name: Install LLDP daemon on Debian/Ubuntu
+      apt:
+        name: "{{ lldp_package }}"
+        state: present
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Install LLDP daemon on RedHat/CentOS
+      yum:
+        name: "{{ lldp_package }}"
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Clear any problematic config (Debian/Ubuntu)
+      copy:
+        content: |
+          # Managed by Ansible - Basic configuration
+          DAEMON_ARGS=""
+        dest: /etc/default/lldpd
+        mode: '0644'
+        backup: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Clear any problematic config (RedHat/CentOS)
+      copy:
+        content: |
+          # Managed by Ansible - Basic configuration
+          LLDPD_OPTIONS=""
+        dest: /etc/sysconfig/lldpd
+        mode: '0644'
+        backup: yes
+      when: ansible_os_family == "RedHat"
+
+    - name: Ensure LLDP service is enabled and started
+      systemd:
+        name: "{{ lldp_service }}"
+        enabled: yes
+        state: restarted
+        daemon_reload: yes
+
+    - name: Wait for service to stabilize
+      wait_for:
+        timeout: 3
+      delegate_to: localhost
+
+    - name: Verify LLDP service is running
+      systemd:
+        name: "{{ lldp_service }}"
+      register: lldp_status
+
+    - name: Display LLDP service status
+      debug:
+        msg: "LLDP service is {{ lldp_status.status.ActiveState }}"
+
+    - name: Make lldpctl socket world-readable as alternative
+      file:
+        path: /run/lldpd.socket
+        mode: '0666'
+      failed_when: false
+
+    - name: Display note about socket permissions
+      debug:
+        msg: "Note: Socket permissions set to 0666 to allow non-root access. For production, consider setting up proper group permissions after verifying lldpd supports -g flag."

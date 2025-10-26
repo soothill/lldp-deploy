@@ -1,0 +1,113 @@
+---
+- name: Deploy and Configure LLDP - Fixed Version
+  hosts: all
+  become: yes
+
+  vars:
+    lldp_package: lldpd
+    lldp_service: lldpd
+    lldp_socket_group: lldpd
+
+  tasks:
+    - name: Install LLDP daemon on Debian/Ubuntu
+      apt:
+        name: "{{ lldp_package }}"
+        state: present
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Install LLDP daemon on RedHat/CentOS
+      yum:
+        name: "{{ lldp_package }}"
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Create lldpd group for socket access
+      group:
+        name: "{{ lldp_socket_group }}"
+        state: present
+        system: yes
+
+    - name: Get lldpd group ID
+      command: getent group lldpd
+      register: lldpd_group_info
+      changed_when: false
+
+    - name: Extract GID
+      set_fact:
+        lldpd_gid: "{{ lldpd_group_info.stdout.split(':')[2] }}"
+
+    - name: Display GID
+      debug:
+        msg: "lldpd group GID is {{ lldpd_gid }}"
+
+    - name: Add current user to lldpd group
+      user:
+        name: "{{ ansible_user }}"
+        groups: "{{ lldp_socket_group }}"
+        append: yes
+      when: ansible_user is defined and ansible_user != 'root'
+
+    - name: Stop lldpd service before reconfiguration
+      systemd:
+        name: "{{ lldp_service }}"
+        state: stopped
+      failed_when: false
+
+    - name: Configure lldpd with GID (Debian/Ubuntu)
+      copy:
+        content: |
+          # Managed by Ansible
+          # Configure lldpd to use group-accessible socket
+          # Using GID instead of group name
+          DAEMON_ARGS="-g {{ lldpd_gid }}"
+        dest: /etc/default/lldpd
+        mode: '0644'
+        backup: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Configure lldpd with GID (RedHat/CentOS)
+      copy:
+        content: |
+          # Managed by Ansible
+          # Configure lldpd to use group-accessible socket
+          # Using GID instead of group name
+          LLDPD_OPTIONS="-g {{ lldpd_gid }}"
+        dest: /etc/sysconfig/lldpd
+        mode: '0644'
+        backup: yes
+      when: ansible_os_family == "RedHat"
+
+    - name: Ensure LLDP service is enabled and started
+      systemd:
+        name: "{{ lldp_service }}"
+        enabled: yes
+        state: started
+        daemon_reload: yes
+
+    - name: Wait for service to stabilize
+      wait_for:
+        timeout: 3
+      delegate_to: localhost
+
+    - name: Verify LLDP service is running
+      command: systemctl is-active lldpd
+      register: service_status
+      changed_when: false
+      failed_when: false
+
+    - name: Display service status
+      debug:
+        msg: "LLDP service status: {{ service_status.stdout }}"
+
+    - name: Get detailed status if failed
+      command: systemctl status lldpd
+      register: detailed_status
+      when: service_status.stdout != "active"
+      changed_when: false
+      failed_when: false
+
+    - name: Display detailed status if failed
+      debug:
+        var: detailed_status.stdout_lines
+      when: service_status.stdout != "active"
